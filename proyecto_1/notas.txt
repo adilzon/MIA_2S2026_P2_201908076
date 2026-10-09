@@ -1,0 +1,38 @@
+make clean // para borrar
+make // para ejecutar el conpilador
+
+./run
+
+|-------------  crear disco   -------------|
+mkdisk -size=3000 -u=m -path=/home/bramlley/Documentos/disco1.dsk
+mkdisk -size=3000 -u=m -path=/home/bramlley/Documentos/practica/proyecto_1/disco1.dsk
+
+|-------------  crear particion   -------------|
+fdisk -type=P -u=k -name=Part1 -size=100 -path=/home/bramlley/Documentos/disco1.dsk -f=BF
+fdisk -size=15 -u=m -path=/home/bramlley/Documentos/practica/proyecto_1/disco1.dsk -t=p -name=particion1
+
+|-------------  crear mount   -------------|
+mount -path=/home/bramlley/Documentos/disco1.dsk -name=Part1 
+mount -path=/home/bramlley/Documentos/practica/proyecto_1/disco1.dsk -name=particion1
+
+mount // esto manda a llamar a listmount() 
+
+|-------------  Eliminar Disco   -------------|
+rmdisk -path=/home/bramlley/Documentos/disco1.dsk
+
+mostrar  ERROR
+mkdisk -size=3000 -u=m -path=/home/bramlley/Documentos/disco1.dks
+
+|-------------  Reportes   -------------|
+rep -id=651a -path=/home/bramlley/Documentos/reporte1.jpg -name=mbr  
+rep -id=651a -path=/home/bramlley/Documentos/reporte_tree.jpg -name=tree
+rep -id=651a -path=/home/bramlley/Documentos/reporte2.jpg -name=ebr  
+rep -id=651a -path=/home/bramlley/Documentos/reporte3.jpg -name=inode  
+
+|-------------  Creacion de Sistemas de Archivos   -------------|
+mkfs -type=fast -id=651a -fs=3fs
+
+|-------------  Login   -------------|
+login -usr=root -pwd=123 -id=651a
+
+Toca instalar graphviz
