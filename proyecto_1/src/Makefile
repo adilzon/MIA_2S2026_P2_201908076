@@ -1,34 +1,52 @@
+CXX = g++
+CXXFLAGS = -std=c++17
+LDFLAGS = -lpthread
+
+# En entornos Windows agrega ws2_32; en Linux permanece solo -lpthread
+ifeq ($(OS),Windows_NT)
+    LDFLAGS += -lws2_32
+endif
+
 OBJECTS = main.o ../include/scanner.o ../include/disco.o ../include/mount.o ../include/shared.o ../include/filesystem.o ../include/filemanager.o ../include/report.o ../include/users.o
+API_OBJECTS = api_main.o ../include/scanner.o ../include/disco.o ../include/mount.o ../include/shared.o ../include/filesystem.o ../include/filemanager.o ../include/report.o ../include/users.o
+
+all: run api
 
 run: $(OBJECTS)
-	g++ -std=c++17 -o $@ $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJECTS)
+
+api: $(API_OBJECTS)
+	$(CXX) $(CXXFLAGS) -o api_server $(API_OBJECTS) $(LDFLAGS)
+
+api_main.o: api_main.cpp
+	$(CXX) $(CXXFLAGS) -c api_main.cpp -I../lib
 
 main.o: main.cpp
-	g++ -std=c++17 -c main.cpp -I../lib
+	$(CXX) $(CXXFLAGS) -c main.cpp -I../lib
 
 ../include/scanner.o: ../include/scanner.cpp
-	g++ -std=c++17 -c ../include/scanner.cpp -I../lib -o ../include/scanner.o
+	$(CXX) $(CXXFLAGS) -c ../include/scanner.cpp -I../lib -o ../include/scanner.o
 
 ../include/disco.o: ../include/disco.cpp
-	g++ -std=c++17 -c ../include/disco.cpp -I../lib -o ../include/disco.o
+	$(CXX) $(CXXFLAGS) -c ../include/disco.cpp -I../lib -o ../include/disco.o
 
 ../include/mount.o: ../include/mount.cpp
-	g++ -std=c++17 -c ../include/mount.cpp -I../lib -o ../include/mount.o
+	$(CXX) $(CXXFLAGS) -c ../include/mount.cpp -I../lib -o ../include/mount.o
 
 ../include/shared.o: ../include/shared.cpp
-	g++ -std=c++17 -c ../include/shared.cpp -I../lib -o ../include/shared.o
+	$(CXX) $(CXXFLAGS) -c ../include/shared.cpp -I../lib -o ../include/shared.o
 
 ../include/filesystem.o: ../include/filesystem.cpp
-	g++ -std=c++17 -c ../include/filesystem.cpp -I../lib -o ../include/filesystem.o
+	$(CXX) $(CXXFLAGS) -c ../include/filesystem.cpp -I../lib -o ../include/filesystem.o
 
 ../include/filemanager.o: ../include/filemanager.cpp
-	g++ -std=c++17 -c ../include/filemanager.cpp -I../lib -o ../include/filemanager.o
+	$(CXX) $(CXXFLAGS) -c ../include/filemanager.cpp -I../lib -o ../include/filemanager.o
 
 ../include/report.o: ../include/report.cpp
-	g++ -std=c++17 -c ../include/report.cpp -I../lib -o ../include/report.o
+	$(CXX) $(CXXFLAGS) -c ../include/report.cpp -I../lib -o ../include/report.o
 
 ../include/users.o: ../include/users.cpp
-	g++ -std=c++17 -c ../include/users.cpp -I../lib -o ../include/users.o
+	$(CXX) $(CXXFLAGS) -c ../include/users.cpp -I../lib -o ../include/users.o
 
 clean:
-	rm -f run run.exe main.o ../include/*.o
+	rm -f run run.exe api_server api_server.exe *.o ../include/*.o

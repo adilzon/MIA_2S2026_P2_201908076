@@ -1,0 +1,77 @@
+¿Qué debes hacer ahora?
+Paso 1: Instalar dependencias en Linux
+Abre una terminal y ejecuta uno por uno:
+
+bash
+# 1. Actualizar repositorios
+sudo apt update && sudo apt upgrade -y
+
+# 2. Instalar herramientas de compilación y Graphviz
+sudo apt install -y build-essential g++ make graphviz curl
+
+# 3. Instalar Node.js (versión 20)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 4. Verificar que todo se instaló bien
+g++ --version
+make --version
+dot -V
+node -v
+npm -v
+¿Qué hace cada cosa?
+
+build-essential: Instala g++ (compilador de C++) y make.
+
+graphviz: Para generar los reportes visuales.
+
+curl: Para probar los endpoints.
+
+nodejs y npm: Para el frontend en React.
+
+Paso 2: Iniciar el Backend (Terminal 1)
+bash
+# Opción 1: Usando el script (más fácil)
+chmod +x run_backend.sh
+./run_backend.sh
+
+# Opción 2: Manual
+cd proyecto_1/src
+make api
+./api_server
+¿Qué deberías ver?
+
+text
+[SERVER HTTP] Servidor iniciado exitosamente en http://localhost:8080
+Si ves esto, el backend está funcionando.
+
+Paso 3: Iniciar el Frontend (Terminal 2)
+Abre otra terminal (no cierres la del backend) y ejecuta:
+
+bash
+# Opción 1: Usando el script
+chmod +x run_frontend.sh
+./run_frontend.sh
+
+# Opción 2: Manual
+cd frontend
+npm install
+npm run dev
+¿Qué deberías ver?
+
+text
+VITE v5.2.0  ready in 500 ms
+➜  Local:   http://localhost:5173/
+Si ves esto, el frontend está funcionando.
+
+Paso 4: Abrir el Navegador
+Ve a: http://localhost:5173
+
+Deberías ver la interfaz de tu proyecto (la terminal, el login, etc.).
+
+Paso 5: Probar los Endpoints (Opcional)
+Si quieres probar que el backend responde correctamente, abre otra terminal y ejecuta:
+
+bash
+chmod +x test_endpoints_linux.sh
+./test_endpoints_linux.sh

@@ -357,3 +357,51 @@ void scanner::excec(string path) {
 
     input_file.close();
 }
+
+void scanner::execute_line(string linea) {
+    if (!linea.empty() && linea.back() == '\r') {
+        linea.pop_back();
+    }
+    size_t first_non_space = linea.find_first_not_of(" \t");
+    if (first_non_space == string::npos) return;
+    linea = linea.substr(first_non_space);
+
+    if (linea.front() == '#') return;
+
+    bool in_q = false;
+    string clean_line = "";
+    for (char c : linea) {
+        if (c == '\"') in_q = !in_q;
+        if (c == '#' && !in_q) break;
+        clean_line += c;
+    }
+    linea = clean_line;
+
+    string tk = token(linea);
+    if (tk.empty()) return;
+
+    string resto = linea.substr(tk.length());
+    vector<string> tks = split_tokens(resto);
+    functions(tk, tks);
+}
+
+void scanner::execute_script(string script_text) {
+    stringstream ss(script_text);
+    string line;
+    while (getline(ss, line)) {
+        execute_line(line);
+    }
+}
+
+Mount& scanner::get_mount_instance() {
+    return mount_inst;
+}
+
+Users& scanner::get_user_instance() {
+    return user;
+}
+
+bool scanner::is_logged_in() {
+    return logued;
+}
+
