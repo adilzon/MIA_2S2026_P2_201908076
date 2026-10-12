@@ -1,10 +1,10 @@
 CXX = g++
-CXXFLAGS = -std=c++17
-LDFLAGS = -lpthread
+CXXFLAGS = -std=c++17 -pthread
+LDFLAGS = -pthread
 
-# En entornos Windows agrega ws2_32; en Linux permanece solo -lpthread
+# En entornos Windows agrega ws2_32; en Linux permanece -pthread
 ifeq ($(OS),Windows_NT)
-    LDFLAGS += -lws2_32
+    LDFLAGS = -lpthread -lws2_32
 endif
 
 OBJECTS = main.o ../include/scanner.o ../include/disco.o ../include/mount.o ../include/shared.o ../include/filesystem.o ../include/filemanager.o ../include/report.o ../include/users.o
@@ -13,7 +13,7 @@ API_OBJECTS = api_main.o ../include/scanner.o ../include/disco.o ../include/moun
 all: run api
 
 run: $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $(OBJECTS)
+	$(CXX) $(CXXFLAGS) -o $@ $(OBJECTS) $(LDFLAGS)
 
 api: $(API_OBJECTS)
 	$(CXX) $(CXXFLAGS) -o api_server $(API_OBJECTS) $(LDFLAGS)
@@ -50,7 +50,7 @@ main.o: main.cpp
 
 clean:
 ifeq ($(OS),Windows_NT)
-	-cmd /c del /f /q run.exe api_server.exe *.o ..\include\*.o 2>nul
+	-cmd /c del /f /q run run.exe api_server api_server.exe *.o ..\include\*.o 2>nul
 else
 	rm -f run run.exe api_server api_server.exe *.o ../include/*.o
 endif

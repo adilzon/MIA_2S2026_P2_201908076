@@ -424,21 +424,25 @@ int main() {
                     }
                 }
             }
-            // Discos en directorio actual (.dsk y .mia)
-            try {
-                for (const auto &entry : filesystem::directory_iterator(".")) {
-                    if (entry.is_regular_file()) {
-                        string ext = entry.path().extension().string();
-                        transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-                        if (ext == ".dsk" || ext == ".mia") {
-                            string p = entry.path().string();
-                            if (find(disk_paths.begin(), disk_paths.end(), p) == disk_paths.end()) {
-                                disk_paths.push_back(p);
+            // Discos en directorio actual y carpetas comunes (.dsk y .mia)
+            vector<string> dirs_to_check = {".", "./disks", "../disks", "disks", "./disco", "../disco"};
+            for (const auto &dir_path : dirs_to_check) {
+                if (!filesystem::exists(dir_path)) continue;
+                try {
+                    for (const auto &entry : filesystem::directory_iterator(dir_path)) {
+                        if (entry.is_regular_file()) {
+                            string ext = entry.path().extension().string();
+                            transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                            if (ext == ".dsk" || ext == ".mia") {
+                                string p = entry.path().string();
+                                if (find(disk_paths.begin(), disk_paths.end(), p) == disk_paths.end()) {
+                                    disk_paths.push_back(p);
+                                }
                             }
                         }
                     }
-                }
-            } catch (...) {}
+                } catch (...) {}
+            }
         }
 
         for (const string &dp : disk_paths) {

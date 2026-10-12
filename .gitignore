@@ -1,0 +1,29 @@
+# Compilados C++ (Backend)
+proyecto_1/src/run
+proyecto_1/src/run.exe
+proyecto_1/src/api_server
+proyecto_1/src/api_server.exe
+*.o
+*.exe
+*.out
+
+# Discos binarios y reportes generados
+*.dsk
+*.mia
+*.dot
+reportes/
+
+# Frontend (Node / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/node_modules/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs y SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
