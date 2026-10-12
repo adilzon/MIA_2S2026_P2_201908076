@@ -4,6 +4,7 @@ import CommandInput from './components/CommandInput';
 import CommandOutput from './components/CommandOutput';
 import LoginForm from './components/LoginForm';
 import DiskSelector from './components/DiskSelector';
+import PartitionSelector from './components/PartitionSelector';
 import FileVisualizer from './components/FileVisualizer';
 import JournalViewer from './components/JournalViewer';
 import ReportViewer from './components/ReportViewer';
@@ -16,6 +17,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [executionTime, setExecutionTime] = useState(null);
 
+  // Estados de navegación compartidos
+  const [selectedDisk, setSelectedDisk] = useState(null);
+  const [selectedPartitionId, setSelectedPartitionId] = useState('');
+
   const [session, setSession] = useState({
     isLoggedIn: false,
     user: '',
@@ -25,7 +30,7 @@ export default function App() {
   const [isBackendOnline, setIsBackendOnline] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
-  // Verificar estado del servidor y sesión al cargar la página
+  // Verificar estado del servidor y sesión
   const checkBackendAndSession = async () => {
     try {
       const sess = await apiService.getSession();
@@ -36,6 +41,9 @@ export default function App() {
           user: sess.user,
           id: sess.id
         });
+        if (!selectedPartitionId) {
+          setSelectedPartitionId(sess.id);
+        }
       } else {
         setSession({ isLoggedIn: false, user: '', id: '' });
       }
@@ -70,7 +78,6 @@ export default function App() {
         setOutput((prev) => prev + '\n\n[Servidor completó la ejecución]');
       }
 
-      // Actualizar sesión tras ejecutar comandos (ej: si se ejecutó login o logout)
       checkBackendAndSession();
     } catch (err) {
       setOutput((prev) => (prev ? prev + '\n\n[ERROR]: ' + err.message : '[ERROR]: ' + err.message));
@@ -81,9 +88,27 @@ export default function App() {
 
   // Cerrar sesión
   const handleLogout = async () => {
-    await apiService.logout();
+    try {
+      await apiService.logout();
+    } catch (err) {}
     setSession({ isLoggedIn: false, user: '', id: '' });
+    setSelectedPartitionId('');
     setOutput((prev) => prev + '\n\n[LOGOUT]: Sesión cerrada exitosamente.');
+    setIsLoginOpen(true);
+  };
+
+  // Navegación: Disco seleccionado -> Selector de Particiones
+  const handleDiskSelected = (disk) => {
+    setSelectedDisk(disk);
+    setActiveTab('partitions');
+  };
+
+  // Navegación: Partición seleccionada -> Visualizador de Archivos
+  const handlePartitionSelected = (partition) => {
+    if (partition.id) {
+      setSelectedPartitionId(partition.id);
+      setActiveTab('explorer');
+    }
   };
 
   return (
@@ -117,19 +142,38 @@ export default function App() {
         )}
 
         {activeTab === 'disks' && (
-          <DiskSelector />
+          <DiskSelector
+            onSelectDisk={handleDiskSelected}
+          />
+        )}
+
+        {activeTab === 'partitions' && (
+          <PartitionSelector
+            selectedDisk={selectedDisk}
+            onBackToDisks={() => setActiveTab('disks')}
+            onSelectPartition={handlePartitionSelected}
+          />
         )}
 
         {activeTab === 'explorer' && (
-          <FileVisualizer activeSession={session} />
+          <FileVisualizer
+            activeSession={session}
+            partitionId={selectedPartitionId}
+            onBackToPartitions={() => setActiveTab('partitions')}
+          />
         )}
 
         {activeTab === 'journal' && (
-          <JournalViewer activeSession={session} />
+          <JournalViewer
+            activeSession={session}
+            partitionId={selectedPartitionId}
+          />
         )}
 
         {activeTab === 'reports' && (
-          <ReportViewer activeSession={session} />
+          <ReportViewer
+            activeSession={session}
+          />
         )}
       </main>
 
@@ -139,6 +183,7 @@ export default function App() {
         onClose={() => setIsLoginOpen(false)}
         onLoginSuccess={(newSession) => {
           setSession(newSession);
+          setSelectedPartitionId(newSession.id);
           setOutput((prev) => prev + `\n\n[LOGIN]: Sesión iniciada como "${newSession.user}" (-id=${newSession.id})`);
         }}
       />

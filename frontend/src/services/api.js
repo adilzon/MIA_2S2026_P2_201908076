@@ -85,9 +85,10 @@ export const apiService = {
   },
 
   // 6. GET /api/partitions
-  getPartitions: async () => {
+  getPartitions: async (disk = '') => {
     try {
-      const response = await client.get('/api/partitions');
+      const url = disk ? `/api/partitions?disk=${encodeURIComponent(disk)}` : '/api/partitions';
+      const response = await client.get(url);
       return response.data;
     } catch (error) {
       return { status: 'error', partitions: [], message: error.message };
@@ -118,9 +119,10 @@ export const apiService = {
   },
 
   // 9. GET /api/tree
-  getTree: async (id = '', output = '') => {
+  getTree: async (id = '', path = '', output = '') => {
     try {
       let url = `/api/tree?id=${encodeURIComponent(id)}`;
+      if (path) url += `&path=${encodeURIComponent(path)}`;
       if (output) url += `&output=${encodeURIComponent(output)}`;
       const response = await client.get(url);
       return response.data;

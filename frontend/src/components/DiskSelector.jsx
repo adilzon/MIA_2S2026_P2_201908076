@@ -1,41 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { apiService } from '../services/api';
 
-export default function DiskSelector() {
+export default function DiskSelector({ onSelectDisk }) {
   const [disks, setDisks] = useState([]);
-  const [partitions, setPartitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [customPath, setCustomPath] = useState('');
   const [error, setError] = useState('');
 
-  const loadData = async () => {
+  const loadDisks = async () => {
     setLoading(true);
     setError('');
 
     try {
-      const disksRes = await apiService.getDisks(customPath);
-      const partsRes = await apiService.getPartitions();
-
-      if (disksRes.status === 'success' && disksRes.disks) {
-        setDisks(disksRes.disks);
+      const res = await apiService.getDisks(customPath);
+      if (res.status === 'success' && res.disks) {
+        setDisks(res.disks);
       } else {
         setDisks([]);
-      }
-
-      if (partsRes.status === 'success' && partsRes.partitions) {
-        setPartitions(partsRes.partitions);
-      } else {
-        setPartitions([]);
+        if (res.message) setError(res.message);
       }
     } catch (err) {
-      setError(err.message || 'Error al cargar información de discos');
+      setError(err.message || 'Error al conectar con el backend');
+      setDisks([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadDisks();
   }, []);
 
   const formatSize = (bytes) => {
@@ -50,138 +43,158 @@ export default function DiskSelector() {
     <div className="glass-panel" style={{ flex: 1 }}>
       <div className="panel-header">
         <div className="panel-title">
-          <span>💾</span> Gestión de Discos y Particiones (MBR / EBR)
+          <span>💽</span> Selector de Discos (.mia / .dsk)
         </div>
         <div className="panel-actions">
           <input
             type="text"
             className="form-input"
-            placeholder="Filtrar por path (ej: ./disco1.dsk)"
+            placeholder="Filtrar o ingresar ruta (ej: ./disco1.mia)"
             value={customPath}
             onChange={(e) => setCustomPath(e.target.value)}
-            style={{ width: '260px', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+            onKeyDown={(e) => e.key === 'Enter' && loadDisks()}
+            style={{ width: '280px', padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
           />
-          <button className="btn btn-secondary btn-sm" onClick={loadData}>
+          <button className="btn btn-secondary btn-sm" onClick={loadDisks}>
             🔄 Actualizar
           </button>
         </div>
       </div>
 
       <div className="panel-body">
-        {/* Sección de Particiones Montadas */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h4 style={{ color: 'var(--accent-cyan)', marginBottom: '0.75rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📌</span> Particiones Montadas Activas ({partitions.length})
-          </h4>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '1.25rem', fontSize: '0.9rem' }}>
+          Selecciona un disco haciendo clic sobre su tarjeta para explorar y seleccionar sus particiones:
+        </p>
 
-          {partitions.length === 0 ? (
-            <div style={{ padding: '1rem', background: 'rgba(2, 6, 23, 0.4)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-              No hay particiones montadas actualmente. Utiliza el comando <code>mount -path=... -name=...</code> en la consola.
-            </div>
-          ) : (
-            <div className="grid-cards">
-              {partitions.map((part) => (
-                <div key={part.id} className="disk-card" style={{ borderColor: 'rgba(56, 189, 248, 0.3)' }}>
-                  <div className="disk-header">
-                    <span className="badge badge-cyan" style={{ fontSize: '0.85rem' }}>ID: {part.id}</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', fontWeight: 600 }}>● Montada</span>
-                  </div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fff', marginBottom: '0.4rem' }}>
-                    Partición: {part.name}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    📁 Path: <code>{part.path}</code>
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem' }}>
-                    Letra: <strong>{part.letter}</strong> | Num: <strong>{part.num}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {error && (
+          <div style={{
+            background: 'rgba(244, 63, 94, 0.15)',
+            border: '1px solid rgba(244, 63, 94, 0.4)',
+            color: 'var(--accent-rose)',
+            padding: '0.8rem 1rem',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            marginBottom: '1rem'
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
 
-        {/* Sección de Discos Creados */}
-        <div>
-          <h4 style={{ color: 'var(--accent-cyan)', marginBottom: '0.75rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>💽</span> Estructura MBR de Discos ({disks.length})
-          </h4>
-
-          {loading ? (
-            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              ⌛ Cargando información de discos desde el backend...
+        {loading ? (
+          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            ⌛ Escaneando discos disponibles...
+          </div>
+        ) : disks.length === 0 ? (
+          <div style={{
+            padding: '2.5rem',
+            textAlign: 'center',
+            background: 'rgba(2, 6, 23, 0.4)',
+            borderRadius: '12px',
+            color: 'var(--text-muted)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💿</div>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+              No se detectaron discos creados
             </div>
-          ) : disks.length === 0 ? (
-            <div style={{ padding: '1.5rem', background: 'rgba(2, 6, 23, 0.4)', borderRadius: '10px', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-              No se encontraron discos montados o en la ruta indicada. Ejecuta <code>mkdisk -size=...</code> para crear un disco nuevo.
+            <div style={{ fontSize: '0.85rem' }}>
+              Crea uno en la consola con: <code>mkdisk -size=20 -unit=M -path="disco1.mia"</code>
             </div>
-          ) : (
-            <div className="grid-cards">
-              {disks.map((disk, idx) => (
-                <div key={idx} className="disk-card">
+          </div>
+        ) : (
+          <div className="grid-cards">
+            {disks.map((disk, idx) => {
+              const mountedCount = disk.mountedCount || (disk.mountedPartitions ? disk.mountedPartitions.length : 0);
+              return (
+                <div
+                  key={idx}
+                  className="disk-card clickable-disk"
+                  onClick={() => onSelectDisk && onSelectDisk(disk)}
+                >
                   <div className="disk-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                       <span className="disk-icon">💽</span>
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{disk.path}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Signature: #{disk.signature}</div>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>
+                          {disk.name || disk.path}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Path: <code>{disk.path}</code>
+                        </div>
                       </div>
                     </div>
                     <span className="badge badge-amber">{formatSize(disk.size)}</span>
                   </div>
 
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
-                    📅 Creado: {disk.creationDate} | Fit: <strong>{disk.fit}</strong>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '0.6rem',
+                    background: 'rgba(2, 6, 23, 0.5)',
+                    padding: '0.8rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    margin: '0.8rem 0'
+                  }}>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Ajuste (Fit):</span>{' '}
+                      <strong style={{ color: 'var(--accent-cyan)' }}>{disk.fit}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)' }}>Signature:</span>{' '}
+                      <strong style={{ color: '#fff' }}>#{disk.signature}</strong>
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Fecha de Creación:</span>{' '}
+                      <span style={{ color: 'var(--text-secondary)' }}>{disk.creationDate || 'N/A'}</span>
+                    </div>
                   </div>
 
-                  {/* Barra Visual de Particiones */}
-                  <div className="partition-bar">
-                    {disk.partitions && disk.partitions.map((p, pIdx) => {
-                      const percentage = Math.max(5, (p.size / disk.size) * 100);
-                      const isPrimary = p.type === 'P';
-                      return (
-                        <div
-                          key={pIdx}
-                          className={`partition-segment ${isPrimary ? 'partition-primary' : 'partition-extended'}`}
-                          style={{ width: `${percentage}%` }}
-                          title={`${p.name} (${p.type}) - ${formatSize(p.size)}`}
-                        >
-                          {p.name}
-                        </div>
-                      );
-                    })}
+                  {/* Estado de Particiones Montadas */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: '0.5rem',
+                    borderTop: '1px solid var(--border-color)',
+                    fontSize: '0.8rem'
+                  }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Particiones Montadas:</span>
+                    {mountedCount > 0 ? (
+                      <span className="badge badge-emerald">
+                        ● {mountedCount} montada{mountedCount > 1 ? 's' : ''}
+                      </span>
+                    ) : (
+                      <span className="badge" style={{ background: 'rgba(100, 116, 139, 0.2)', color: 'var(--text-muted)' }}>
+                        Ninguna
+                      </span>
+                    )}
                   </div>
 
-                  {/* Tabla de Particiones en MBR */}
-                  <div className="table-container" style={{ marginTop: '0.8rem' }}>
-                    <table className="custom-table">
-                      <thead>
-                        <tr>
-                          <th>Nombre</th>
-                          <th>Tipo</th>
-                          <th>Fit</th>
-                          <th>Inicio</th>
-                          <th>Tamaño</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {disk.partitions && disk.partitions.map((p, pIdx) => (
-                          <tr key={pIdx}>
-                            <td><strong>{p.name}</strong></td>
-                            <td><span className="badge badge-cyan">{p.type}</span></td>
-                            <td>{p.fit}</td>
-                            <td>{p.start}</td>
-                            <td>{formatSize(p.size)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {disk.mountedPartitions && disk.mountedPartitions.length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      {disk.mountedPartitions.map((mp, mIdx) => (
+                        <span key={mIdx} className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
+                          {mp.id} ({mp.name})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', marginTop: '0.8rem' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onSelectDisk) onSelectDisk(disk);
+                    }}
+                  >
+                    Ver Particiones ➜
+                  </button>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

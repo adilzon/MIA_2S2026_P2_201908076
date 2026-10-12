@@ -14,6 +14,7 @@
 #include "../lib/mount.h"
 #include "../lib/users.h"
 #include "../lib/structs.h"
+#include "../lib/filemanager.h"
 
 using namespace std;
 using json = nlohmann::json;
@@ -246,6 +247,7 @@ int main() {
     });
 
     // -------------------------------------------------------------
+    // -------------------------------------------------------------
     // 6. GET /api/partitions
     // -------------------------------------------------------------
     svr.Get("/api/partitions", [&](const httplib::Request &req, httplib::Response &res) {
@@ -253,22 +255,145 @@ int main() {
         Mount& m = scanner::get_mount_instance();
         json list = json::array();
 
-        for (int i = 0; i < 99; i++) {
-            if (m.mounted[i].status == '1') {
-                string path = m.mounted[i].path;
-                for (int j = 0; j < 26; j++) {
-                    if (m.mounted[i].mpartitions[j].status == '1') {
-                        json part = {
-                            {"id", string(m.mounted[i].mpartitions[j].id)},
-                            {"name", string(m.mounted[i].mpartitions[j].name)},
-                            {"path", path},
-                            {"letter", string(1, m.mounted[i].mpartitions[j].letter)},
-                            {"num", m.mounted[i].mpartitions[j].num}
-                        };
-                        list.push_back(part);
+        vector<string> disk_paths;
+        if (req.has_param("disk")) {
+            disk_paths.push_back(req.get_param_value("disk"));
+        } else if (req.has_param("path")) {
+            disk_paths.push_back(req.get_param_value("path"));
+        } else {
+            // Recoger discos de montajes
+            for (int i = 0; i < 99; i++) {
+                if (m.mounted[i].status == '1' && strlen(m.mounted[i].path) > 0) {
+                    string p = m.mounted[i].path;
+                    if (find(disk_paths.begin(), disk_paths.end(), p) == disk_paths.end()) {
+                        disk_paths.push_back(p);
                     }
                 }
             }
+            // Recoger discos en el directorio actual
+            try {
+                for (const auto &entry : filesystem::directory_iterator(".")) {
+                    if (entry.is_regular_file()) {
+                        string ext = entry.path().extension().string();
+                        transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                        if (ext == ".dsk" || ext == ".mia") {
+                            string p = entry.path().string();
+                            if (find(disk_paths.begin(), disk_paths.end(), p) == disk_paths.end()) {
+                                disk_paths.push_back(p);
+                            }
+                        }
+                    }
+                }
+            } catch (...) {}
+        }
+
+        for (const string &dp : disk_paths) {
+            FILE *f = fopen(dp.c_str(), "rb");
+            if (!f) continue;
+
+            Structs::MBR mbr;
+            if (fread(&mbr, sizeof(Structs::MBR), 1, f) == 1) {
+                Structs::Partition parts[4] = {
+                    mbr.mbr_Partition_1,
+                    mbr.mbr_Partition_2,
+                    mbr.mbr_Partition_3,
+                    mbr.mbr_Partition_4
+                };
+
+                for (int i = 0; i < 4; i++) {
+                    if (parts[i].part_start != -1 && parts[i].part_size > 0 && parts[i].part_name[0] != '\0') {
+                        string pname = string(parts[i].part_name);
+                        string mount_id = "";
+                        bool is_mounted = false;
+
+                        // Verificar si está montada
+                        for (int mi = 0; mi < 99; mi++) {
+                            if (m.mounted[mi].status == '1') {
+                                for (int mj = 0; mj < 26; mj++) {
+                                    if (m.mounted[mi].mpartitions[mj].status == '1' &&
+                                        string(m.mounted[mi].mpartitions[mj].name) == pname) {
+                                        is_mounted = true;
+                                        mount_id = string(m.mounted[mi].mpartitions[mj].id);
+                                        break;
+                                    }
+                                }
+                            }
+                            if (is_mounted) break;
+                        }
+
+                        string fit_str = string(1, parts[i].part_fit);
+                        if (fit_str == "B") fit_str = "BF";
+                        else if (fit_str == "F") fit_str = "FF";
+                        else if (fit_str == "W") fit_str = "WF";
+
+                        json p_obj = {
+                            {"name", pname},
+                            {"type", string(1, parts[i].part_type)},
+                            {"size", parts[i].part_size},
+                            {"fit", fit_str},
+                            {"start", parts[i].part_start},
+                            {"isMounted", is_mounted},
+                            {"id", mount_id},
+                            {"disk", dp},
+                            {"diskName", filesystem::path(dp).filename().string()}
+                        };
+                        list.push_back(p_obj);
+
+                        // Si es extendida, buscar particiones lógicas
+                        if (parts[i].part_type == 'E' || parts[i].part_type == 'e') {
+                            Structs::EBR curr_ebr;
+                            int curr_pos = parts[i].part_start;
+                            fseek(f, curr_pos, SEEK_SET);
+                            if (fread(&curr_ebr, sizeof(Structs::EBR), 1, f) == 1) {
+                                while (true) {
+                                    if (curr_ebr.part_start != -1 && curr_ebr.part_size > 0 && curr_ebr.part_name[0] != '\0') {
+                                        string log_name = string(curr_ebr.part_name);
+                                        string log_mount_id = "";
+                                        bool log_is_mounted = false;
+
+                                        for (int mi = 0; mi < 99; mi++) {
+                                            if (m.mounted[mi].status == '1') {
+                                                for (int mj = 0; mj < 26; mj++) {
+                                                    if (m.mounted[mi].mpartitions[mj].status == '1' &&
+                                                        string(m.mounted[mi].mpartitions[mj].name) == log_name) {
+                                                        log_is_mounted = true;
+                                                        log_mount_id = string(m.mounted[mi].mpartitions[mj].id);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            if (log_is_mounted) break;
+                                        }
+
+                                        string log_fit = string(1, curr_ebr.part_fit);
+                                        if (log_fit == "B") log_fit = "BF";
+                                        else if (log_fit == "F") log_fit = "FF";
+                                        else if (log_fit == "W") log_fit = "WF";
+
+                                        json log_obj = {
+                                            {"name", log_name},
+                                            {"type", "L"},
+                                            {"size", curr_ebr.part_size},
+                                            {"fit", log_fit},
+                                            {"start", curr_ebr.part_start},
+                                            {"isMounted", log_is_mounted},
+                                            {"id", log_mount_id},
+                                            {"disk", dp},
+                                            {"diskName", filesystem::path(dp).filename().string()}
+                                        };
+                                        list.push_back(log_obj);
+                                    }
+                                    if (curr_ebr.part_next == -1) break;
+                                    curr_pos = curr_ebr.part_next;
+                                    fseek(f, curr_pos, SEEK_SET);
+                                    if (fread(&curr_ebr, sizeof(Structs::EBR), 1, f) != 1) break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            fclose(f);
         }
 
         json resp = {
@@ -290,6 +415,7 @@ int main() {
         if (req.has_param("path")) {
             disk_paths.push_back(req.get_param_value("path"));
         } else {
+            // Discos montados
             for (int i = 0; i < 99; i++) {
                 if (m.mounted[i].status == '1' && strlen(m.mounted[i].path) > 0) {
                     string p = m.mounted[i].path;
@@ -298,6 +424,21 @@ int main() {
                     }
                 }
             }
+            // Discos en directorio actual (.dsk y .mia)
+            try {
+                for (const auto &entry : filesystem::directory_iterator(".")) {
+                    if (entry.is_regular_file()) {
+                        string ext = entry.path().extension().string();
+                        transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                        if (ext == ".dsk" || ext == ".mia") {
+                            string p = entry.path().string();
+                            if (find(disk_paths.begin(), disk_paths.end(), p) == disk_paths.end()) {
+                                disk_paths.push_back(p);
+                            }
+                        }
+                    }
+                }
+            } catch (...) {}
         }
 
         for (const string &dp : disk_paths) {
@@ -306,21 +447,48 @@ int main() {
 
             Structs::MBR mbr;
             if (fread(&mbr, sizeof(Structs::MBR), 1, f) == 1) {
+                // Obtener particiones montadas de este disco
+                json mounted_parts = json::array();
+                for (int mi = 0; mi < 99; mi++) {
+                    if (m.mounted[mi].status == '1' && (string(m.mounted[mi].path) == dp || filesystem::path(m.mounted[mi].path).filename() == filesystem::path(dp).filename())) {
+                        for (int mj = 0; mj < 26; mj++) {
+                            if (m.mounted[mi].mpartitions[mj].status == '1') {
+                                mounted_parts.push_back({
+                                    {"id", string(m.mounted[mi].mpartitions[mj].id)},
+                                    {"name", string(m.mounted[mi].mpartitions[mj].name)}
+                                });
+                            }
+                        }
+                    }
+                }
+
+                string fit_str = string(1, mbr.disk_fit);
+                if (fit_str == "B") fit_str = "BF";
+                else if (fit_str == "F") fit_str = "FF";
+                else if (fit_str == "W") fit_str = "WF";
+
                 json disk_obj = {
                     {"path", dp},
+                    {"name", filesystem::path(dp).filename().string()},
                     {"size", mbr.mbr_tamano},
                     {"creationDate", format_time(mbr.mbr_fecha_creacion)},
                     {"signature", mbr.mbr_disk_signature},
-                    {"fit", string(1, mbr.disk_fit)},
+                    {"fit", fit_str},
+                    {"mountedCount", mounted_parts.size()},
+                    {"mountedPartitions", mounted_parts},
                     {"partitions", json::array()}
                 };
 
                 auto parse_part = [](const Structs::Partition &p) -> json {
-                    if (p.part_status == '0' || p.part_size <= 0) return nullptr;
+                    if (p.part_start == -1 || p.part_size <= 0 || p.part_name[0] == '\0') return nullptr;
+                    string pf = string(1, p.part_fit);
+                    if (pf == "B") pf = "BF";
+                    else if (pf == "F") pf = "FF";
+                    else if (pf == "W") pf = "WF";
                     return {
                         {"name", string(p.part_name)},
                         {"type", string(1, p.part_type)},
-                        {"fit", string(1, p.part_fit)},
+                        {"fit", pf},
                         {"start", p.part_start},
                         {"size", p.part_size},
                         {"status", string(1, p.part_status)}
@@ -451,24 +619,147 @@ int main() {
             return;
         }
 
-        string report_output = "reporte_tree_" + id + ".jpg";
+        // Si se pide reporte gráfico con Graphviz (-name=tree)
         if (req.has_param("output")) {
-            report_output = req.get_param_value("output");
+            string report_output = req.get_param_value("output");
+            string cmd = "rep -id=" + id + " -path=" + report_output + " -name=tree";
+            string log_out = run_captured([&]() {
+                scan.execute_line(cmd);
+            });
+
+            json resp = {
+                {"status", "success"},
+                {"id", id},
+                {"reportPath", report_output},
+                {"fileUrl", "/api/file?path=" + report_output},
+                {"output", log_out}
+            };
+            res.set_content(resp.dump(), "application/json");
+            return;
         }
 
-        string cmd = "rep -id=" + id + " -path=" + report_output + " -name=tree";
-        string log_out = run_captured([&]() {
-            scan.execute_line(cmd);
-        });
+        // Navegación interactiva de archivos y carpetas
+        Mount& m = scanner::get_mount_instance();
+        string disk_path;
+        Structs::Partition part;
+        try {
+            part = m.getmount(id, &disk_path);
+        } catch (...) {
+            json err = {{"status", "error"}, {"message", "No se encontro la particion montada con id: " + id}};
+            res.status = 404;
+            res.set_content(err.dump(), "application/json");
+            return;
+        }
 
-        json resp = {
-            {"status", "success"},
-            {"id", id},
-            {"reportPath", report_output},
-            {"fileUrl", "/api/file?path=" + report_output},
-            {"output", log_out}
-        };
-        res.set_content(resp.dump(), "application/json");
+        FILE *f = fopen(disk_path.c_str(), "rb");
+        if (!f) {
+            json err = {{"status", "error"}, {"message", "No se pudo abrir el archivo de disco"}};
+            res.status = 500;
+            res.set_content(err.dump(), "application/json");
+            return;
+        }
+
+        fseek(f, part.part_start, SEEK_SET);
+        Structs::Superblock sb;
+        if (fread(&sb, sizeof(Structs::Superblock), 1, f) != 1) {
+            fclose(f);
+            json err = {{"status", "error"}, {"message", "No se pudo leer el Superbloque"}};
+            res.status = 500;
+            res.set_content(err.dump(), "application/json");
+            return;
+        }
+
+        string target_path = "/";
+        if (req.has_param("path")) {
+            target_path = req.get_param_value("path");
+            if (target_path.empty()) target_path = "/";
+        }
+
+        FileManager fm;
+        vector<string> path_parts = fm.getpath(target_path);
+        int target_inode = (target_path == "/" || path_parts.empty()) ? 0 : fm.find_inode_by_path(f, sb, path_parts);
+
+        if (target_inode == -1) {
+            fclose(f);
+            json err = {{"status", "error"}, {"message", "Ruta no encontrada en el sistema de archivos: " + target_path}};
+            res.status = 404;
+            res.set_content(err.dump(), "application/json");
+            return;
+        }
+
+        Structs::Inodes in;
+        fseek(f, sb.s_inode_start + (target_inode * sizeof(Structs::Inodes)), SEEK_SET);
+        if (fread(&in, sizeof(Structs::Inodes), 1, f) != 1) {
+            fclose(f);
+            json err = {{"status", "error"}, {"message", "Error al leer el inodo de la ruta"}};
+            res.status = 500;
+            res.set_content(err.dump(), "application/json");
+            return;
+        }
+
+        if (in.i_type == '0') {
+            // Es carpeta: listar contenidos
+            json items = json::array();
+            for (int b = 0; b < 12; b++) {
+                if (in.i_block[b] != -1) {
+                    Structs::Folderblock fb;
+                    fseek(f, sb.s_block_start + (in.i_block[b] * sizeof(Structs::Folderblock)), SEEK_SET);
+                    if (fread(&fb, sizeof(Structs::Folderblock), 1, f) == 1) {
+                        for (int k = 0; k < 4; k++) {
+                            if (fb.b_content[k].b_inodo != -1) {
+                                string entry_name = fb.b_content[k].b_name;
+                                if (entry_name != "." && entry_name != "..") {
+                                    Structs::Inodes cin;
+                                    fseek(f, sb.s_inode_start + (fb.b_content[k].b_inodo * sizeof(Structs::Inodes)), SEEK_SET);
+                                    if (fread(&cin, sizeof(Structs::Inodes), 1, f) == 1) {
+                                        string item_path = (target_path == "/") ? ("/" + entry_name) : (target_path + "/" + entry_name);
+                                        items.push_back({
+                                            {"name", entry_name},
+                                            {"type", (cin.i_type == '0') ? "folder" : "file"},
+                                            {"path", item_path},
+                                            {"size", cin.i_size},
+                                            {"date", format_time(cin.i_mtime)},
+                                            {"perm", cin.i_perm},
+                                            {"uid", cin.i_uid},
+                                            {"gid", cin.i_gid}
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            fclose(f);
+
+            json resp = {
+                {"status", "success"},
+                {"id", id},
+                {"type", "folder"},
+                {"path", target_path},
+                {"items", items}
+            };
+            res.set_content(resp.dump(), "application/json");
+        } else {
+            // Es archivo: leer contenido
+            string file_data = fm.read_file_content(f, sb, target_inode);
+            fclose(f);
+
+            json resp = {
+                {"status", "success"},
+                {"id", id},
+                {"type", "file"},
+                {"path", target_path},
+                {"name", path_parts.empty() ? "" : path_parts.back()},
+                {"size", in.i_size},
+                {"content", file_data},
+                {"date", format_time(in.i_mtime)},
+                {"perm", in.i_perm},
+                {"uid", in.i_uid},
+                {"gid", in.i_gid}
+            };
+            res.set_content(resp.dump(), "application/json");
+        }
     });
 
     // Handle 404

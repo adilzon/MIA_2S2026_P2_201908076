@@ -35,35 +35,42 @@ export default function Navbar({
           className={`nav-tab ${activeTab === 'terminal' ? 'active' : ''}`}
           onClick={() => setActiveTab('terminal')}
         >
-          <span>💻</span> Consola / Terminal
+          <span>💻</span> Consola
         </button>
 
         <button
           className={`nav-tab ${activeTab === 'disks' ? 'active' : ''}`}
           onClick={() => setActiveTab('disks')}
         >
-          <span>💾</span> Discos & Particiones
+          <span>💽</span> Discos
+        </button>
+
+        <button
+          className={`nav-tab ${activeTab === 'partitions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('partitions')}
+        >
+          <span>📦</span> Particiones
         </button>
 
         <button
           className={`nav-tab ${activeTab === 'explorer' ? 'active' : ''}`}
           onClick={() => setActiveTab('explorer')}
         >
-          <span>📁</span> Explorador de Archivos
+          <span>📁</span> Explorador
         </button>
 
         <button
           className={`nav-tab ${activeTab === 'journal' ? 'active' : ''}`}
           onClick={() => setActiveTab('journal')}
         >
-          <span>📜</span> Journaling (EXT3)
+          <span>📜</span> Journaling
         </button>
 
         <button
           className={`nav-tab ${activeTab === 'reports' ? 'active' : ''}`}
           onClick={() => setActiveTab('reports')}
         >
-          <span>📊</span> Reportes Graphviz
+          <span>📊</span> Reportes
         </button>
       </div>
 
@@ -79,14 +86,30 @@ export default function Navbar({
           <span>{isBackendOnline ? 'Backend 8080' : 'Desconectado'}</span>
         </div>
 
-        {/* Sesión de Usuario */}
+        {/* Sesión de Usuario & Botón Cerrar Sesión */}
         {session.isLoggedIn ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--accent-cyan)', fontWeight: '600' }}>
-              👤 {session.user} ({session.id})
+            <span style={{
+              fontSize: '0.85rem',
+              color: 'var(--accent-cyan)',
+              fontWeight: '600',
+              background: 'rgba(56, 189, 248, 0.1)',
+              padding: '0.3rem 0.6rem',
+              borderRadius: '6px',
+              border: '1px solid rgba(56, 189, 248, 0.25)'
+            }}>
+              👤 {session.user} <span style={{ color: 'var(--text-muted)' }}>({session.id})</span>
             </span>
-            <button className="btn btn-secondary btn-sm" onClick={onLogout}>
-              Cerrar Sesión
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={onLogout}
+              style={{
+                borderColor: 'rgba(244, 63, 94, 0.3)',
+                color: 'var(--accent-rose)'
+              }}
+              title="Cerrar la sesión actual"
+            >
+              🚪 Cerrar Sesión
             </button>
           </div>
         ) : (
@@ -96,7 +119,7 @@ export default function Navbar({
         )}
       </div>
 
-      {/* Modal de Configuración de URL */}
+      {/* Modal de Configuración de URL Backend */}
       {showConfig && (
         <div className="modal-overlay">
           <div className="modal-content">
