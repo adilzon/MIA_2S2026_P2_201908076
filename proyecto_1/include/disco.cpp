@@ -416,7 +416,7 @@ void Disk::generatepartition(string s, string u, string p, string t, string f, s
         // Recolectar intervalos ocupados
         vector<pair<int, int>> occupied;
         for (const auto &prttn : partitions) {
-            if (prttn.part_status == '1') {
+            if (prttn.part_start != -1 && prttn.part_size > 0 && prttn.part_name[0] != '\0') {
                 occupied.push_back({prttn.part_start, prttn.part_start + prttn.part_size});
             }
         }
@@ -530,7 +530,7 @@ Structs::Partition Disk::findby(Structs::MBR mbr, string name, string path) {
     bool ext = false;
     Structs::Partition extended;
     for (auto &partition : partitions) {
-        if (partition.part_status == '1') {
+        if (partition.part_start != -1 && partition.part_size > 0 && partition.part_name[0] != '\0') {
             if (shared.compare(partition.part_name, name)) {
                 return partition;
             } else if (partition.part_type == 'E' || partition.part_type == 'e') {
@@ -542,7 +542,7 @@ Structs::Partition Disk::findby(Structs::MBR mbr, string name, string path) {
     if (ext) {
         vector<Structs::EBR> ebrs = getlogics(extended, path);
         for (const Structs::EBR &ebr : ebrs) {
-            if (ebr.part_status == '1') {
+            if (ebr.part_start != -1 && ebr.part_size > 0 && ebr.part_name[0] != '\0') {
                 if (shared.compare(ebr.part_name, name)) {
                     Structs::Partition tmp;
                     tmp.part_status = '1';
@@ -677,20 +677,86 @@ void Disk::deletepartition(string d, string p, string n) {
         };
 
         bool found = false;
+        // 1. Buscar en primarias y extendidas
         for (int i = 0; i < 4; i++) {
-            if (parts[i]->part_status == '1' && shared.compare(parts[i]->part_name, n)) {
+            if (parts[i]->part_start != -1 && parts[i]->part_name[0] != '\0' && shared.compare(parts[i]->part_name, n)) {
                 found = true;
+                bool is_ext = (parts[i]->part_type == 'E' || parts[i]->part_type == 'e');
+                int start = parts[i]->part_start;
+                int size = parts[i]->part_size;
+
                 if (shared.compare(d, "fast")) {
                     parts[i]->part_status = '0';
+                    memset(parts[i]->part_name, 0, sizeof(parts[i]->part_name));
+                    parts[i]->part_size = 0;
+                    parts[i]->part_start = -1;
+                    if (is_ext) {
+                        // Marcar inicio de extendida como vacío
+                        Structs::EBR empty_ebr;
+                        fseek(file, start, SEEK_SET);
+                        fwrite(&empty_ebr, sizeof(Structs::EBR), 1, file);
+                    }
                 } else {
-                    int start = parts[i]->part_start;
-                    int size = parts[i]->part_size;
                     *parts[i] = Structs::Partition();
                     fseek(file, start, SEEK_SET);
                     char zero = '\0';
-                    for (int z = 0; z < size; z++) fwrite(&zero, 1, 1, file);
+                    vector<char> buffer(65536, '\0');
+                    int remaining = size;
+                    while (remaining > 0) {
+                        int to_write = min(remaining, (int)buffer.size());
+                        fwrite(buffer.data(), 1, to_write, file);
+                        remaining -= to_write;
+                    }
                 }
                 break;
+            }
+        }
+
+        // 2. Si no es primaria ni extendida, buscar en lógicas
+        if (!found) {
+            for (int i = 0; i < 4; i++) {
+                if (parts[i]->part_start != -1 && (parts[i]->part_type == 'E' || parts[i]->part_type == 'e')) {
+                    Structs::EBR prev_ebr;
+                    Structs::EBR curr_ebr;
+                    int prev_pos = -1;
+                    int curr_pos = parts[i]->part_start;
+
+                    fseek(file, curr_pos, SEEK_SET);
+                    if (fread(&curr_ebr, sizeof(Structs::EBR), 1, file) == 1) {
+                        while (true) {
+                            if (curr_ebr.part_start != -1 && curr_ebr.part_name[0] != '\0' && shared.compare(curr_ebr.part_name, n)) {
+                                found = true;
+                                if (shared.compare(d, "full")) {
+                                    fseek(file, curr_ebr.part_start, SEEK_SET);
+                                    vector<char> buffer(curr_ebr.part_size, '\0');
+                                    fwrite(buffer.data(), 1, curr_ebr.part_size, file);
+                                }
+
+                                if (prev_pos == -1) {
+                                    // Era el primer EBR de la extendida
+                                    curr_ebr.part_status = '0';
+                                    memset(curr_ebr.part_name, 0, sizeof(curr_ebr.part_name));
+                                    curr_ebr.part_size = 0;
+                                    fseek(file, curr_pos, SEEK_SET);
+                                    fwrite(&curr_ebr, sizeof(Structs::EBR), 1, file);
+                                } else {
+                                    // Conectar EBR anterior con el siguiente
+                                    prev_ebr.part_next = curr_ebr.part_next;
+                                    fseek(file, prev_pos, SEEK_SET);
+                                    fwrite(&prev_ebr, sizeof(Structs::EBR), 1, file);
+                                }
+                                break;
+                            }
+                            if (curr_ebr.part_next == -1) break;
+                            prev_pos = curr_pos;
+                            prev_ebr = curr_ebr;
+                            curr_pos = curr_ebr.part_next;
+                            fseek(file, curr_pos, SEEK_SET);
+                            if (fread(&curr_ebr, sizeof(Structs::EBR), 1, file) != 1) break;
+                        }
+                    }
+                    if (found) break;
+                }
             }
         }
 
@@ -702,7 +768,7 @@ void Disk::deletepartition(string d, string p, string n) {
         rewind(file);
         fwrite(&disk, sizeof(Structs::MBR), 1, file);
         fclose(file);
-        shared.response("FDISK", "partición eliminada correctamente");
+        shared.response("FDISK", "partición eliminada correctamente: " + n);
     }
     catch (exception &e) {
         shared.handler("FDISK", e.what());
@@ -710,5 +776,138 @@ void Disk::deletepartition(string d, string p, string n) {
 }
 
 void Disk::addpartition(string add, string u, string n, string p) {
-    // Add or remove space
+    try {
+        if (p.front() == '\"') {
+            p = p.substr(1, p.length() - 2);
+        }
+
+        int add_val = stoi(add);
+        int add_bytes = add_val;
+        if (shared.compare(u, "b")) {
+            // bytes
+        } else if (shared.compare(u, "k")) {
+            add_bytes *= 1024;
+        } else if (shared.compare(u, "m")) {
+            add_bytes *= 1024 * 1024;
+        } else {
+            throw runtime_error("-unit no contiene valores válidos (b, k, m)");
+        }
+
+        FILE *file = fopen(p.c_str(), "rb+");
+        if (file == NULL) {
+            throw runtime_error("disco no existente");
+        }
+
+        Structs::MBR disk;
+        fread(&disk, sizeof(Structs::MBR), 1, file);
+
+        Structs::Partition *parts[4] = {
+            &disk.mbr_Partition_1,
+            &disk.mbr_Partition_2,
+            &disk.mbr_Partition_3,
+            &disk.mbr_Partition_4
+        };
+
+        // 1. Buscar entre primarias y extendidas
+        int target_idx = -1;
+        for (int i = 0; i < 4; i++) {
+            if (parts[i]->part_start != -1 && parts[i]->part_name[0] != '\0' && shared.compare(parts[i]->part_name, n)) {
+                target_idx = i;
+                break;
+            }
+        }
+
+        if (target_idx != -1) {
+            Structs::Partition *target = parts[target_idx];
+            if (add_bytes < 0) {
+                // Quitar espacio
+                if (target->part_size + add_bytes <= 0) {
+                    fclose(file);
+                    throw runtime_error("no se puede reducir la partición a un tamaño menor o igual a cero");
+                }
+                target->part_size += add_bytes;
+            } else {
+                // Agregar espacio: verificar espacio posterior
+                int current_end = target->part_start + target->part_size;
+                int next_start = disk.mbr_tamano;
+
+                for (int i = 0; i < 4; i++) {
+                    if (i != target_idx && parts[i]->part_start != -1 && parts[i]->part_size > 0 && parts[i]->part_name[0] != '\0') {
+                        if (parts[i]->part_start >= current_end && parts[i]->part_start < next_start) {
+                            next_start = parts[i]->part_start;
+                        }
+                    }
+                }
+
+                int available_after = next_start - current_end;
+                if (add_bytes > available_after) {
+                    fclose(file);
+                    throw runtime_error("no hay suficiente espacio contiguo libre después de la partición para expandirla");
+                }
+                target->part_size += add_bytes;
+            }
+
+            rewind(file);
+            fwrite(&disk, sizeof(Structs::MBR), 1, file);
+            fclose(file);
+            shared.response("FDISK", "espacio de la partición " + n + " modificado correctamente");
+            return;
+        }
+
+        // 2. Buscar entre lógicas
+        bool found_logic = false;
+        for (int i = 0; i < 4; i++) {
+            if (parts[i]->part_start != -1 && (parts[i]->part_type == 'E' || parts[i]->part_type == 'e')) {
+                Structs::Partition *ext = parts[i];
+                Structs::EBR curr_ebr;
+                int curr_pos = ext->part_start;
+
+                fseek(file, curr_pos, SEEK_SET);
+                if (fread(&curr_ebr, sizeof(Structs::EBR), 1, file) == 1) {
+                    while (true) {
+                        if (curr_ebr.part_start != -1 && curr_ebr.part_name[0] != '\0' && shared.compare(curr_ebr.part_name, n)) {
+                            found_logic = true;
+                            if (add_bytes < 0) {
+                                if (curr_ebr.part_size + add_bytes <= 0) {
+                                    fclose(file);
+                                    throw runtime_error("no se puede reducir la partición lógica a un tamaño menor o igual a cero");
+                                }
+                                curr_ebr.part_size += add_bytes;
+                            } else {
+                                int curr_end = curr_ebr.part_start + (int)sizeof(Structs::EBR) + curr_ebr.part_size;
+                                int limit = (curr_ebr.part_next != -1) ? curr_ebr.part_next : (ext->part_start + ext->part_size);
+                                if (curr_end + add_bytes > limit) {
+                                    fclose(file);
+                                    throw runtime_error("no hay suficiente espacio contiguo libre para expandir la partición lógica");
+                                }
+                                curr_ebr.part_size += add_bytes;
+                            }
+
+                            fseek(file, curr_pos, SEEK_SET);
+                            fwrite(&curr_ebr, sizeof(Structs::EBR), 1, file);
+                            break;
+                        }
+                        if (curr_ebr.part_next == -1) break;
+                        curr_pos = curr_ebr.part_next;
+                        fseek(file, curr_pos, SEEK_SET);
+                        if (fread(&curr_ebr, sizeof(Structs::EBR), 1, file) != 1) break;
+                    }
+                }
+                if (found_logic) break;
+            }
+        }
+
+        fclose(file);
+        if (found_logic) {
+            shared.response("FDISK", "espacio de la partición lógica " + n + " modificado correctamente");
+        } else {
+            throw runtime_error("la partición " + n + " no existe en el disco");
+        }
+    }
+    catch (invalid_argument &) {
+        shared.handler("FDISK", "-add debe ser un entero");
+    }
+    catch (exception &e) {
+        shared.handler("FDISK", e.what());
+    }
 }

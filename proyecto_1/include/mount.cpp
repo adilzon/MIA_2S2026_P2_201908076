@@ -197,9 +197,36 @@ void Mount::unmount(string id) {
                 for (int j = 0; j < 26; j++) {
                     if (mounted[i].mpartitions[j].status == '1') {
                         if (shared.compare(mounted[i].mpartitions[j].id, id)) {
+                            // Cambiar correlativo a 0 y estado a 0
                             mounted[i].mpartitions[j].status = '0';
+                            mounted[i].mpartitions[j].num = 0;
+                            string part_name = string(mounted[i].mpartitions[j].name);
                             mounted[i].mpartitions[j].id[0] = '\0';
                             mounted[i].mpartitions[j].name[0] = '\0';
+
+                            // Actualizar el estado en el MBR si aplica
+                            FILE *file = fopen(mounted[i].path, "rb+");
+                            if (file != NULL) {
+                                Structs::MBR disk;
+                                if (fread(&disk, sizeof(Structs::MBR), 1, file) == 1) {
+                                    Structs::Partition *parts[4] = {
+                                        &disk.mbr_Partition_1,
+                                        &disk.mbr_Partition_2,
+                                        &disk.mbr_Partition_3,
+                                        &disk.mbr_Partition_4
+                                    };
+                                    for (int p = 0; p < 4; p++) {
+                                        if (shared.compare(parts[p]->part_name, part_name)) {
+                                            parts[p]->part_status = '0';
+                                            break;
+                                        }
+                                    }
+                                    rewind(file);
+                                    fwrite(&disk, sizeof(Structs::MBR), 1, file);
+                                }
+                                fclose(file);
+                            }
+
                             shared.response("UNMOUNT", "se ha realizado correctamente el unmount -id=" + id);
                             return;
                         }

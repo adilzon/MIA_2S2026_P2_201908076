@@ -29,6 +29,24 @@ public:
                            const string &operation, const string &path, const string &content = "");
     static void record_journal(string disk_path, const Structs::Partition &partition,
                                const string &operation, const string &path, const string &content = "");
+    void remove_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void rename_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void copy_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void move_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void find_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void chown_cmd(vector<string> context, Structs::Partition partition, string pth, Users &user);
+    void loss_cmd(vector<string> context, Mount &mount_inst);
+
+    bool check_permission(const Structs::Inodes &inode, const Users::User &logged, int req_perm);
+    bool check_permission_recursive(FILE *disk, Structs::Superblock &sb, int inode_idx, const Users::User &logged, int req_perm);
+    void free_inode_and_blocks(FILE *disk, Structs::Superblock &sb, int inode_idx);
+    bool remove_folder_entry(FILE *disk, Structs::Superblock &sb, int parent_inode_idx, string name);
+    int copy_inode_recursive(FILE *disk_src, Structs::Superblock &sb_src, int src_inode_idx,
+                             FILE *disk_dst, Structs::Superblock &sb_dst, int uid, int gid);
+    bool match_pattern(const string &pattern, const string &text);
+    void search_tree(FILE *disk, Structs::Superblock &sb, int inode_idx, const string &current_path,
+                     const string &pattern, vector<string> &results);
+    void chown_recursive(FILE *disk, Structs::Superblock &sb, int inode_idx, int new_uid);
 
 private:
     int allocate_inode(FILE *disk, Structs::Superblock &sb, char type, int perm, int uid, int gid, int size);

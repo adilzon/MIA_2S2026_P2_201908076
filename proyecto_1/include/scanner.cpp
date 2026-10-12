@@ -285,10 +285,60 @@ void scanner::functions(string token, vector<string> tks) {
         filemanager.cat(tks, partition, p, user);
     } else if (compare(token, "REP")) {
         report.generar(tks, mount_inst);
-    } else if (compare(token, "EXEC")) {
+    } else if (compare(token, "EXEC") || compare(token, "EXECUTE")) {
         funcion_excec(tks);
     } else if (compare(token, "PAUSE")) {
         cout << "\033[33m--- PAUSE (presione ENTER para continuar) ---\033[0m" << endl;
+    } else if (compare(token, "REMOVE")) {
+        if (!logued) {
+            shared.handler("REMOVE", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.remove_cmd(tks, partition, p, user);
+    } else if (compare(token, "RENAME")) {
+        if (!logued) {
+            shared.handler("RENAME", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.rename_cmd(tks, partition, p, user);
+    } else if (compare(token, "COPY")) {
+        if (!logued) {
+            shared.handler("COPY", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.copy_cmd(tks, partition, p, user);
+    } else if (compare(token, "MOVE")) {
+        if (!logued) {
+            shared.handler("MOVE", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.move_cmd(tks, partition, p, user);
+    } else if (compare(token, "FIND")) {
+        if (!logued) {
+            shared.handler("FIND", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.find_cmd(tks, partition, p, user);
+    } else if (compare(token, "CHOWN")) {
+        if (!logued) {
+            shared.handler("CHOWN", "debe de iniciar sesion primero");
+            return;
+        }
+        string p;
+        Structs::Partition partition = mount_inst.getmount(user.logged.id, &p);
+        filemanager.chown_cmd(tks, partition, p, user);
+    } else if (compare(token, "LOSS")) {
+        filemanager.loss_cmd(tks, mount_inst);
     } else if (compare(token, "JOURNALING")) {
         cmd_journaling(tks);
     } else if (token.front() == '#') {

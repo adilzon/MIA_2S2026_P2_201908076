@@ -1,0 +1,71 @@
+# ===================================================
+# SCRIPT DE PRUEBA INTEGRAL: FASE 2 - NUEVOS COMANDOS
+# ===================================================
+
+# 1. Crear disco y particiones
+mkdisk -size=30 -unit=M -path="test_fase2.dsk"
+fdisk -type=P -unit=M -name=Part1 -size=5 -path="test_fase2.dsk"
+fdisk -type=P -unit=M -name=Part2 -size=5 -path="test_fase2.dsk"
+fdisk -type=E -unit=M -name=PartExt -size=10 -path="test_fase2.dsk"
+fdisk -type=L -unit=M -name=PartLog1 -size=2 -path="test_fase2.dsk"
+
+# 2. Probar FDISK -add (positivo y negativo)
+fdisk -add=1 -unit=M -name=PartLog1 -path="test_fase2.dsk"
+fdisk -add=-1 -unit=M -name=PartLog1 -path="test_fase2.dsk"
+fdisk -add=1 -unit=M -name=Part2 -path="test_fase2.dsk"
+fdisk -add=-1 -unit=M -name=Part2 -path="test_fase2.dsk"
+
+# 3. Montar y formatear en EXT3 (3fs)
+mount -path="test_fase2.dsk" -name=Part1
+mkfs -id=761A -fs=3fs
+
+# 4. Iniciar sesión como root
+login -user=root -pass=123 -id=761A
+
+# 5. Crear estructura inicial de carpetas y archivos
+mkdir -path=/home
+mkdir -path=/home/archivos
+mkfile -path=/home/archivos/doc1.txt -size=25 -r
+mkfile -path=/home/archivos/doc2.txt -size=15 -r
+mkfile -path=/home/archivos/nota.txt -size=10 -r
+mkfile -path=/home/archivos/foto.png -size=30 -r
+
+# 6. Probar FIND con comodines
+find -path=/home -name=*.txt
+find -path=/home -name=doc?.txt
+
+# 7. Probar RENAME
+rename -path=/home/archivos/nota.txt -name=nota2.txt
+find -path=/home -name=*.txt
+
+# 8. Probar COPY
+mkdir -path=/home/copias
+copy -path=/home/archivos/doc1.txt -destino=/home/copias
+find -path=/home/copias -name=*
+
+# 9. Probar MOVE
+move -path=/home/archivos/foto.png -destino=/home/copias
+find -path=/home -name=*.png
+
+# 10. Probar CHOWN
+mkusr -user=operador -pass=123 -grp=root
+chown -path=/home/copias -usuario=operador -r
+
+# 11. Probar REMOVE
+remove -path=/home/archivos/doc2.txt
+find -path=/home/archivos -name=*
+
+# 12. Probar JOURNALING (debe registrar mkdir, mkfile, rename, copy, move, chown, remove)
+journaling -id=761A
+
+# 13. Probar LOSS (simular pérdida de EXT3)
+loss -id=761A
+
+# 14. Probar UNMOUNT
+logout
+unmount -id=761A
+mounted
+
+# 15. Probar FDISK -delete (fast y full)
+fdisk -delete=fast -name=PartLog1 -path="test_fase2.dsk"
+fdisk -delete=full -name=Part2 -path="test_fase2.dsk"
