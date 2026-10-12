@@ -72,14 +72,19 @@ public:
         int b_pointers[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
     } Pointerblock;
 
-    typedef struct _Journaling {
-        char operation[10] = "";
-        char type = -1;
-        char path[100] = "";
-        char content[60] = "";
-        time_t date;
-        int size = 0;
-    } Journaling;
+    typedef struct _Information {
+        char i_operation[10] = "";
+        char i_path[32] = "";
+        char i_content[64] = "";
+        float i_date = 0.0f;
+    } Information;
+
+    typedef struct _Journal {
+        int j_count = 0;
+        Information j_content;
+    } Journal;
+
+    typedef Journal Journaling;
 
     typedef struct _Superblock {
         int s_filesystem_type;

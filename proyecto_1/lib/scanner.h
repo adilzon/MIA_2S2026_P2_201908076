@@ -24,6 +24,7 @@ public:
     void funcion_excec(vector<string> tokens);
     void excec(string path);
     bool confirmar(string mensaje);
+    void cmd_journaling(vector<string> tokens);
 
     // Métodos auxiliares para la API HTTP
     void execute_line(string linea);

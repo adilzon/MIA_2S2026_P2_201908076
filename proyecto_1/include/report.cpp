@@ -830,5 +830,84 @@ void Report::tree(string p, string id) {
 }
 
 void Report::journaling(string p, string id) {
-    shared.response("REPORT", "Reporte journaling procesado");
+    try {
+        string disk_path;
+        Structs::Partition partition = mount.getmount(id, &disk_path);
+
+        FILE *file = fopen(disk_path.c_str(), "rb");
+        if (file == NULL) throw runtime_error("disco no existente");
+
+        Structs::Superblock spr;
+        fseek(file, partition.part_start, SEEK_SET);
+        if (fread(&spr, sizeof(Structs::Superblock), 1, file) != 1) {
+            fclose(file);
+            throw runtime_error("no se pudo leer el superbloque");
+        }
+
+        if (spr.s_filesystem_type != 3) {
+            fclose(file);
+            throw runtime_error("La particion no es un sistema de archivos EXT3 (no contiene journaling)");
+        }
+
+        stringstream ss;
+        ss << "digraph G {\n"
+           << "  rankdir=TB;\n"
+           << "  node [shape=plaintext fontname=\"Arial\"];\n"
+           << "  journal [label=<\n"
+           << "    <table border='0' cellborder='1' cellspacing='0'>\n"
+           << "      <tr><td colspan='5' bgcolor='#1B4F72'><font color='white'><b>REPORTE JOURNALING (EXT3)</b></font></td></tr>\n"
+           << "      <tr bgcolor='#5DADE2'>\n"
+           << "        <td><b>#</b></td>\n"
+           << "        <td><b>Operacion</b></td>\n"
+           << "        <td><b>Path</b></td>\n"
+           << "        <td><b>Contenido</b></td>\n"
+           << "        <td><b>Fecha</b></td>\n"
+           << "      </tr>\n";
+
+        fseek(file, partition.part_start + sizeof(Structs::Superblock), SEEK_SET);
+        int valid_entries = 0;
+        for (int i = 0; i < 50; i++) {
+            Structs::Journal j_entry;
+            if (fread(&j_entry, sizeof(Structs::Journal), 1, file) == 1) {
+                if (j_entry.j_count > 0 && strlen(j_entry.j_content.i_operation) > 0) {
+                    valid_entries++;
+                    time_t t = static_cast<time_t>(j_entry.j_content.i_date);
+                    char buf[30];
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&t));
+
+                    string safe_content = "";
+                    string raw_c = j_entry.j_content.i_content;
+                    for (char c : raw_c) {
+                        if (c == '<') safe_content += "&lt;";
+                        else if (c == '>') safe_content += "&gt;";
+                        else if (c == '&') safe_content += "&amp;";
+                        else if (c == '\n') safe_content += " ";
+                        else safe_content += c;
+                    }
+                    if (safe_content.empty()) safe_content = "-";
+
+                    ss << "      <tr>\n"
+                       << "        <td>" << j_entry.j_count << "</td>\n"
+                       << "        <td>" << j_entry.j_content.i_operation << "</td>\n"
+                       << "        <td>" << j_entry.j_content.i_path << "</td>\n"
+                       << "        <td>" << safe_content << "</td>\n"
+                       << "        <td>" << buf << "</td>\n"
+                       << "      </tr>\n";
+                }
+            }
+        }
+
+        if (valid_entries == 0) {
+            ss << "      <tr><td colspan='5'><i>(Sin operaciones registradas en el Journal)</i></td></tr>\n";
+        }
+
+        ss << "    </table>\n  >];\n}\n";
+        fclose(file);
+
+        execute_dot(ss.str(), p);
+        shared.response("REPORT", "Reporte journaling procesado correctamente");
+    }
+    catch (exception &e) {
+        shared.handler("REPORT", e.what());
+    }
 }

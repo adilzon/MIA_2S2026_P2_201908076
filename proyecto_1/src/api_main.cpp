@@ -402,20 +402,21 @@ int main() {
         }
 
         json journal_list = json::array();
-        int n = sb.s_inodes_count;
         fseek(f, part.part_start + sizeof(Structs::Superblock), SEEK_SET);
 
-        for (int i = 0; i < n; i++) {
-            Structs::Journaling j_entry;
-            if (fread(&j_entry, sizeof(Structs::Journaling), 1, f) == 1) {
-                if (strlen(j_entry.operation) > 0) {
+        for (int i = 0; i < 50; i++) {
+            Structs::Journal j_entry;
+            if (fread(&j_entry, sizeof(Structs::Journal), 1, f) == 1) {
+                if (j_entry.j_count > 0 && strlen(j_entry.j_content.i_operation) > 0) {
+                    time_t t = static_cast<time_t>(j_entry.j_content.i_date);
                     json item = {
-                        {"operation", string(j_entry.operation)},
-                        {"type", string(1, j_entry.type)},
-                        {"path", string(j_entry.path)},
-                        {"content", string(j_entry.content)},
-                        {"date", format_time(j_entry.date)},
-                        {"size", j_entry.size}
+                        {"count", j_entry.j_count},
+                        {"operation", string(j_entry.j_content.i_operation)},
+                        {"type", "-"},
+                        {"path", string(j_entry.j_content.i_path)},
+                        {"content", string(j_entry.j_content.i_content)},
+                        {"date", format_time(t)},
+                        {"size", (int)strlen(j_entry.j_content.i_content)}
                     };
                     journal_list.push_back(item);
                 }

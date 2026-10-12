@@ -53,11 +53,15 @@ void FileSystem::mkfs(string id, string t, string fs) {
         string p;
         Structs::Partition partition = mount.getmount(id, &p);
 
-        int n = (shared.compare(fs, "2fs")) ? 
-            floor((double)(partition.part_size - sizeof(Structs::Superblock)) /
-                  (4.0 + sizeof(Structs::Inodes) + 3.0 * sizeof(Structs::Fileblock))) :
-            floor((double)(partition.part_size - sizeof(Structs::Superblock)) /
-                  (4.0 + sizeof(Structs::Inodes) + 3.0 * sizeof(Structs::Fileblock) + sizeof(Structs::Journaling)));
+        int n = 0;
+        if (shared.compare(fs, "2fs")) {
+            n = floor((double)(partition.part_size - sizeof(Structs::Superblock)) /
+                      (4.0 + sizeof(Structs::Inodes) + 3.0 * sizeof(Structs::Fileblock)));
+        } else {
+            // EXT3: constante de 50 estructuras de Journaling
+            n = floor((double)(partition.part_size - sizeof(Structs::Superblock) - 50.0 * sizeof(Structs::Journal)) /
+                      (4.0 + sizeof(Structs::Inodes) + 3.0 * sizeof(Structs::Fileblock)));
+        }
 
         if (n <= 2) {
             throw runtime_error("El tamaño de la partición es demasiado pequeño para el sistema de archivos");
@@ -192,9 +196,8 @@ void FileSystem::ext2(Structs::Superblock spr, Structs::Partition p, int n, stri
 
     fclose(bfile);
 }
-
 void FileSystem::ext3(Structs::Superblock spr, Structs::Partition p, int n, string path) {
-    spr.s_bm_inode_start = p.part_start + sizeof(Structs::Superblock) + (n * sizeof(Structs::Journaling));
+    spr.s_bm_inode_start = p.part_start + sizeof(Structs::Superblock) + (50 * sizeof(Structs::Journal));
     spr.s_bm_block_start = spr.s_bm_inode_start + n;
     spr.s_inode_start = spr.s_bm_block_start + (3 * n);
     spr.s_block_start = spr.s_inode_start + (n * sizeof(Structs::Inodes));
@@ -204,10 +207,12 @@ void FileSystem::ext3(Structs::Superblock spr, Structs::Partition p, int n, stri
         throw runtime_error("No se pudo abrir el disco para formatear ext3");
     }
 
-    // Inicializar Journaling
-    Structs::Journaling empty_journaling;
+    // Inicializar Journaling (50 entradas fijas)
+    Structs::Journal empty_journal;
+    empty_journal.j_count = 0;
+    memset(&empty_journal.j_content, 0, sizeof(empty_journal.j_content));
     fseek(bfile, p.part_start + sizeof(Structs::Superblock), SEEK_SET);
-    for (int i = 0; i < n; i++) fwrite(&empty_journaling, sizeof(Structs::Journaling), 1, bfile);
+    for (int i = 0; i < 50; i++) fwrite(&empty_journal, sizeof(Structs::Journal), 1, bfile);
 
     // Bitmaps con '0'
     char zero = '0';

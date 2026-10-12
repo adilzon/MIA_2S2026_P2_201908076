@@ -13,6 +13,7 @@
 #include <vector>
 #include <algorithm>
 #include <cctype>
+#include <iomanip>
 
 using namespace std;
 
@@ -288,6 +289,8 @@ void scanner::functions(string token, vector<string> tks) {
         funcion_excec(tks);
     } else if (compare(token, "PAUSE")) {
         cout << "\033[33m--- PAUSE (presione ENTER para continuar) ---\033[0m" << endl;
+    } else if (compare(token, "JOURNALING")) {
+        cmd_journaling(tks);
     } else if (token.front() == '#') {
         // Comentario ignorado
     } else {
@@ -403,5 +406,87 @@ Users& scanner::get_user_instance() {
 
 bool scanner::is_logged_in() {
     return logued;
+}
+
+void scanner::cmd_journaling(vector<string> tokens) {
+    try {
+        string id = "";
+        for (const string &tok : tokens) {
+            string key = shared.lower(tok.substr(0, tok.find('=')));
+            if (shared.compare(key, "id")) {
+                string val = tok.substr(key.length() + 1);
+                if (!val.empty() && val.front() == '\"') val = val.substr(1, val.length() - 2);
+                id = val;
+            }
+        }
+        if (id.empty() && logued) {
+            id = user.logged.id;
+        }
+        if (id.empty()) {
+            throw runtime_error("requiere parametro obligatorio -id");
+        }
+
+        string disk_path;
+        Structs::Partition part = mount_inst.getmount(id, &disk_path);
+        if (part.part_start == -1) {
+            throw runtime_error("la particion no esta montada: " + id);
+        }
+
+        FILE *f = fopen(disk_path.c_str(), "rb");
+        if (!f) throw runtime_error("no se pudo abrir el disco");
+
+        Structs::Superblock sb;
+        fseek(f, part.part_start, SEEK_SET);
+        if (fread(&sb, sizeof(Structs::Superblock), 1, f) != 1) {
+            fclose(f);
+            throw runtime_error("no se pudo leer el superbloque");
+        }
+
+        if (sb.s_filesystem_type != 3) {
+            fclose(f);
+            throw runtime_error("la particion no es EXT3 (no contiene journaling)");
+        }
+
+        cout << "\n======================================== REPORTE DE JOURNALING (ID: " << id << ") ========================================" << endl;
+        cout << left << setw(4) << "#" 
+             << setw(12) << "OPERACION" 
+             << setw(32) << "PATH" 
+             << setw(22) << "FECHA" 
+             << "CONTENIDO" << endl;
+        cout << string(95, '-') << endl;
+
+        int entries_found = 0;
+        fseek(f, part.part_start + sizeof(Structs::Superblock), SEEK_SET);
+        for (int i = 0; i < 50; i++) {
+            Structs::Journal j_entry;
+            if (fread(&j_entry, sizeof(Structs::Journal), 1, f) == 1) {
+                if (j_entry.j_count > 0 && strlen(j_entry.j_content.i_operation) > 0) {
+                    entries_found++;
+                    time_t t = static_cast<time_t>(j_entry.j_content.i_date);
+                    char buf[30];
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", localtime(&t));
+
+                    string content_str = j_entry.j_content.i_content;
+                    if (content_str.empty()) content_str = "-";
+                    else if (content_str.length() > 30) content_str = content_str.substr(0, 27) + "...";
+
+                    cout << left << setw(4) << j_entry.j_count
+                         << setw(12) << j_entry.j_content.i_operation
+                         << setw(32) << j_entry.j_content.i_path
+                         << setw(22) << buf
+                         << content_str << endl;
+                }
+            }
+        }
+
+        if (entries_found == 0) {
+            cout << "(No hay transacciones registradas en el journal)" << endl;
+        }
+        cout << string(95, '=') << "\n" << endl;
+        fclose(f);
+    }
+    catch (exception &e) {
+        shared.handler("JOURNALING", e.what());
+    }
 }
 

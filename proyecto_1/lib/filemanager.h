@@ -25,6 +25,11 @@ public:
     int find_inode_by_path(FILE *disk, Structs::Superblock &sb, const vector<string> &path_parts);
     string read_file_content(FILE *disk, Structs::Superblock &sb, int inode_idx);
 
+    void add_journal_entry(FILE *disk, const Structs::Partition &partition, const Structs::Superblock &sb,
+                           const string &operation, const string &path, const string &content = "");
+    static void record_journal(string disk_path, const Structs::Partition &partition,
+                               const string &operation, const string &path, const string &content = "");
+
 private:
     int allocate_inode(FILE *disk, Structs::Superblock &sb, char type, int perm, int uid, int gid, int size);
     int allocate_block(FILE *disk, Structs::Superblock &sb);

@@ -305,6 +305,11 @@ void FileManager::mkdir(vector<string> context, Structs::Partition partition, st
             }
         }
 
+        // Registrar en Journal si es EXT3
+        if (sb.s_filesystem_type == 3) {
+            add_journal_entry(disk, partition, sb, "mkdir", path, "-");
+        }
+
         // Guardar Superblock
         fseek(disk, partition.part_start, SEEK_SET);
         fwrite(&sb, sizeof(Structs::Superblock), 1, disk);
@@ -488,6 +493,11 @@ void FileManager::mkfile(vector<string> context, Structs::Partition partition, s
 
         add_folder_entry(disk, sb, current_inode, filename, file_ino);
 
+        // Registrar en Journal si es EXT3
+        if (sb.s_filesystem_type == 3) {
+            add_journal_entry(disk, partition, sb, "mkfile", path, data);
+        }
+
         fseek(disk, partition.part_start, SEEK_SET);
         fwrite(&sb, sizeof(Structs::Superblock), 1, disk);
         fclose(disk);
@@ -558,4 +568,64 @@ void FileManager::cat(vector<string> context, Structs::Partition partition, stri
     catch (exception &e) {
         shared.handler("CAT", e.what());
     }
+}
+
+void FileManager::add_journal_entry(FILE *disk, const Structs::Partition &partition, const Structs::Superblock &sb,
+                                    const string &operation, const string &path, const string &content) {
+    if (sb.s_filesystem_type != 3) {
+        return;
+    }
+
+    const int JOURNAL_COUNT = 50;
+    long journal_start = partition.part_start + sizeof(Structs::Superblock);
+
+    Structs::Journal j_entry;
+    int target_idx = -1;
+    int next_count = 1;
+
+    for (int i = 0; i < JOURNAL_COUNT; i++) {
+        fseek(disk, journal_start + (i * sizeof(Structs::Journal)), SEEK_SET);
+        if (fread(&j_entry, sizeof(Structs::Journal), 1, disk) == 1) {
+            if (j_entry.j_count > 0 && strlen(j_entry.j_content.i_operation) > 0) {
+                next_count = j_entry.j_count + 1;
+            } else {
+                target_idx = i;
+                break;
+            }
+        } else {
+            target_idx = i;
+            break;
+        }
+    }
+
+    if (target_idx == -1) {
+        return;
+    }
+
+    Structs::Journal new_journal;
+    new_journal.j_count = next_count;
+    memset(&new_journal.j_content, 0, sizeof(new_journal.j_content));
+    strncpy(new_journal.j_content.i_operation, operation.c_str(), sizeof(new_journal.j_content.i_operation) - 1);
+    strncpy(new_journal.j_content.i_path, path.c_str(), sizeof(new_journal.j_content.i_path) - 1);
+    strncpy(new_journal.j_content.i_content, content.c_str(), sizeof(new_journal.j_content.i_content) - 1);
+    new_journal.j_content.i_date = static_cast<float>(time(nullptr));
+
+    fseek(disk, journal_start + (target_idx * sizeof(Structs::Journal)), SEEK_SET);
+    fwrite(&new_journal, sizeof(Structs::Journal), 1, disk);
+}
+
+void FileManager::record_journal(string disk_path, const Structs::Partition &partition,
+                                const string &operation, const string &path, const string &content) {
+    FILE *disk = fopen(disk_path.c_str(), "rb+");
+    if (disk == NULL) return;
+
+    Structs::Superblock sb;
+    fseek(disk, partition.part_start, SEEK_SET);
+    if (fread(&sb, sizeof(Structs::Superblock), 1, disk) == 1) {
+        if (sb.s_filesystem_type == 3) {
+            FileManager fm;
+            fm.add_journal_entry(disk, partition, sb, operation, path, content);
+        }
+    }
+    fclose(disk);
 }
