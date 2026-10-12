@@ -49,4 +49,8 @@ main.o: main.cpp
 	$(CXX) $(CXXFLAGS) -c ../include/users.cpp -I../lib -o ../include/users.o
 
 clean:
+ifeq ($(OS),Windows_NT)
+	-cmd /c del /f /q run.exe api_server.exe *.o ..\include\*.o 2>nul
+else
 	rm -f run run.exe api_server api_server.exe *.o ../include/*.o
+endif
