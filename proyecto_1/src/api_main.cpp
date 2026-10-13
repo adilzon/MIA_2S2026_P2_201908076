@@ -56,15 +56,39 @@ int main() {
     // Configuración Global de CORS
     // -------------------------------------------------------------
     auto set_cors_headers = [](httplib::Response &res) {
+        // En httplib, res.headers es un std::unordered_multimap.
+        // Llamar set_header() múltiples veces inserta duplicados en vez de sobrescribir.
+        // Para asegurar que cada cabecera aparezca EXACTAMENTE UNA VEZ, borramos cualquier previa:
+        res.headers.erase("Access-Control-Allow-Origin");
+        res.headers.erase("Access-Control-Allow-Methods");
+        res.headers.erase("Access-Control-Allow-Headers");
+        res.headers.erase("Access-Control-Max-Age");
+
         res.set_header("Access-Control-Allow-Origin", "*");
         res.set_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         res.set_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+        res.set_header("Access-Control-Max-Age", "86400");
     };
 
-    // Preflight Handler para todas las rutas
+    // Preflight Handler para todas las rutas (OPTIONS)
     svr.Options(R"(.*)", [set_cors_headers](const httplib::Request &, httplib::Response &res) {
         set_cors_headers(res);
         res.status = 204;
+    });
+
+    // Interceptor pre-routing para solicitudes OPTIONS
+    svr.set_pre_routing_handler([set_cors_headers](const httplib::Request &req, httplib::Response &res) {
+        if (req.method == "OPTIONS") {
+            set_cors_headers(res);
+            res.status = 204;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
+    // Interceptor post-routing: garantiza cabeceras CORS en todas las respuestas sin duplicar
+    svr.set_post_routing_handler([set_cors_headers](const httplib::Request &, httplib::Response &res) {
+        set_cors_headers(res);
     });
 
     // Helper para capturar stdout de comandos
@@ -766,11 +790,13 @@ int main() {
         }
     });
 
-    // Handle 404
+    // Handle 404 y errores
     svr.set_error_handler([set_cors_headers](const httplib::Request &, httplib::Response &res) {
         set_cors_headers(res);
-        json err = {{"status", "error"}, {"message", "Endpoint no encontrado (404)"}};
-        res.set_content(err.dump(), "application/json");
+        if (res.status == 404 && res.body.empty()) {
+            json err = {{"status", "error"}, {"message", "Endpoint no encontrado (404)"}};
+            res.set_content(err.dump(), "application/json");
+        }
     });
 
     int port = 8080;
