@@ -1,15 +1,15 @@
 import React, { useRef, useEffect } from 'react';
 
-// Formateador simple de secuencias ANSI escape (\033[1;32m, \033[0m, etc.) a elementos React
+// Formateador simple de secuencias ANSI escape (\x1B[1;32m, \x1B[0m, etc.) a elementos React
 function renderFormattedAnsi(text) {
   if (!text) return <span style={{ color: 'var(--text-muted)' }}>Esperando ejecución de comandos...</span>;
 
   // Regex para capturar secuencias de color ANSI
-  const parts = text.split(/(\x1B\[[0-9;]*m|\033\[[0-9;]*m)/g);
+  const parts = text.split(/(\x1B\[[0-9;]*m)/g);
   let currentColorClass = 'ansi-green';
 
   return parts.map((part, index) => {
-    if (part.startsWith('\x1B[') || part.startsWith('\033[')) {
+    if (part.startsWith('\x1B[')) {
       if (part.includes('0;31m') || part.includes('1;31m') || part.includes('41m')) {
         currentColorClass = 'ansi-red';
       } else if (part.includes('0;32m') || part.includes('1;92m')) {
