@@ -800,17 +800,17 @@ int main() {
     });
 
     int port = 8080;
-    cout << "\033[1;32m[SERVER HTTP]\033[0m Servidor iniciado exitosamente en http://localhost:" << port << endl;
+    cout << "\033[1;32m[SERVER HTTP]\033[0m Servidor iniciado exitosamente en http://52.14.118.143:" << port << endl;
     cout << "\033[1;33mEndpoints expuestos:\033[0m" << endl;
-    cout << "  - POST http://localhost:" << port << "/api/execute" << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/file?path=..." << endl;
-    cout << "  - POST http://localhost:" << port << "/api/login" << endl;
-    cout << "  - POST http://localhost:" << port << "/api/logout" << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/session" << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/partitions" << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/disks" << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/journal?id=..." << endl;
-    cout << "  - GET  http://localhost:" << port << "/api/tree?id=..." << endl;
+    cout << "  - POST http://52.14.118.143:" << port << "/api/execute" << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/file?path=..." << endl;
+    cout << "  - POST http://52.14.118.143:" << port << "/api/login" << endl;
+    cout << "  - POST http://52.14.118.143:" << port << "/api/logout" << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/session" << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/partitions" << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/disks" << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/journal?id=..." << endl;
+    cout << "  - GET  http://52.14.118.143:" << port << "/api/tree?id=..." << endl;
     cout << "\033[1;36mPresiona Ctrl+C para detener el servidor.\033[0m" << endl;
 
     if (!svr.listen("0.0.0.0", port)) {

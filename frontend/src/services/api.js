@@ -1,6 +1,18 @@
 import axios from 'axios';
 
-let API_BASE_URL = localStorage.getItem('API_BASE_URL') || 'http://localhost:8080';
+const CLOUD_API_BASE_URL = import.meta.env.VITE_API_URL || 'http://52.14.118.143:8080';
+const isLocalFrontend = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const defaultApiBaseUrl = isLocalFrontend ? 'http://localhost:8080' : CLOUD_API_BASE_URL;
+const savedApiBaseUrl = localStorage.getItem('API_BASE_URL');
+const isSavedLocalhostUrl = savedApiBaseUrl && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(savedApiBaseUrl);
+const isSavedPreviousEc2Url = savedApiBaseUrl && /^https?:\/\/18\.222\.191\.97(?::8080)?\/?$/i.test(savedApiBaseUrl);
+const shouldUseDefaultUrl = !savedApiBaseUrl || (!isLocalFrontend && (isSavedLocalhostUrl || isSavedPreviousEc2Url));
+
+let API_BASE_URL = shouldUseDefaultUrl ? defaultApiBaseUrl : savedApiBaseUrl;
+
+if (savedApiBaseUrl !== API_BASE_URL) {
+  localStorage.setItem('API_BASE_URL', API_BASE_URL);
+}
 
 const client = axios.create({
   baseURL: API_BASE_URL,
